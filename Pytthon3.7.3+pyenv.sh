@@ -24,3 +24,10 @@ python -V
 
 # 安装python
 pyenv install 3.7.3
+
+
+# # 更新pip
+# pip install --upgrade pip
+
+# # 设置3.7.3为全局版本
+# pyenv global 3.7.3
