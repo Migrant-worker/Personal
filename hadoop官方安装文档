@@ -1,0 +1,155 @@
+# 1、安装java并配置JAVA_HOME
+yum -y install java java-1.8.0-openjdk-devel
+echo export JAVA_HOME=/usr/lib/jvm/java/ >> ~/.bashrc
+
+
+# 2、
+hadoop下载链接：
+https://mirrors.tuna.tsinghua.edu.cn/apache/hadoop/common/hadoop-3.3.0/hadoop-3.3.0.tar.gz
+hive下载链接：
+https://mirrors.tuna.tsinghua.edu.cn/apache/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz
+
+进入hadoop目录下，查看hadoop命令
+cd hadoop-3.3.0/
+bin/hadoop
+
+
+# 3、创建input目录，复制etc/hadoop目录下xml文件到input下
+mkdir input
+cp etc/hadoop/*.xml input
+bin/hadoop jar share/hadoop/mapreduce/hadoop-mapreduce-examples-3.2.1.jar grep input output 'dfs[a-z.]+'
+cat output/*
+
+
+# 4、修改hdfs的配置，在以下文件中各自添加以下的内容
+etc/hadoop/core-site.xml:
+
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:9000</value>
+    </property>
+</configuration>
+etc/hadoop/hdfs-site.xml:
+
+<configuration>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+</configuration>
+
+# 5、生成ssh密钥对，配置ssh无密码登录
+
+ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+chmod 0600 ~/.ssh/authorized_keys
+ssh-copy-id  -i ~/.ssh/id_rsa.pub  root@00
+
+# 6、格式化hdfs文件系统，尝试启动hdfs
+
+bin/hdfs namenode -format
+
+sbin/start-dfs.sh
+
+配置执行MapReduce需要的工作目录
+bin/hdfs dfs -mkdir /user
+bin/hdfs dfs -mkdir /user/root
+
+复制风不是文件系统到input目录下
+bin/hdfs dfs -mkdir input
+bin/hdfs dfs -put etc/hadoop/*.xml input
+bin/hadoop jar share/hadoop/mapreduce/hadoop-mapreduce-examples-3.2.1.jar grep input output 'dfs[a-z.]+'
+检查输出文件：将输出文件从分布式文件系统复制到本地文件系统并检查它们：
+
+bin/hdfs dfs -get output output
+cat output/*
+或者
+bin/hdfs dfs -cat output/*
+完成后停止hdfs程序
+sbin/stop-dfs.sh
+
+
+# 7、配置单节点yarn
+
+修改一下两个配置文件
+etc/hadoop/mapred-site.xml:
+
+<configuration>
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+    </property>
+    <property>
+        <name>mapreduce.application.classpath</name>
+        <value>$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/*:$HADOOP_MAPRED_HOME/share/hadoop/mapreduce/lib/*</value>
+    </property>
+</configuration>
+etc/hadoop/yarn-site.xml:
+
+<configuration>
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+    </property>
+    <property>
+        <name>yarn.nodemanager.env-whitelist</name>
+        <value>JAVA_HOME,HADOOP_COMMON_HOME,HADOOP_HDFS_HOME,HADOOP_CONF_DIR,CLASSPATH_PREPEND_DISTCACHE,HADOOP_YARN_HOME,HADOOP_MAPRED_HOME</value>
+    </property>
+</configuration>
+
+
+启动yarn进程
+  $ sbin/start-yarn.sh
+
+
+访问http://localhost:8088/查看yarn是否正确配置启动
+
+
+停止yarn进程
+
+  $ sbin/stop-yarn.sh
+
+
+/*
+WARNING: HADOOP_SECURE_DN_USER has been replaced使用root配置的hadoop并启动会出现报错
+1、使用root配置的hadoop并启动会出现报错
+错误：
+        Starting namenodes on [master]
+        ERROR: Attempting to operate on hdfs namenode as root
+       
+        ERROR: but there is no HDFS_NAMENODE_USER defined. Aborting operation.
+       
+        Starting datanodes
+        ERROR: Attempting to operate on hdfs datanode as root
+       
+        ERROR: but there is no HDFS_DATANODE_USER defined. Aborting operation.
+        Starting secondary namenodes [slave1]
+        ERROR: Attempting to operate on hdfs secondarynamenode as root
+        ERROR: but there is no HDFS_SECONDARYNAMENODE_USER defined. Aborting operation.
+解决方法：
+         在/hadoop/sbin路径下：
+         将start-dfs.sh，stop-dfs.sh两个文件顶部添加以下参数
+              HDFS_DATANODE_USER=root
+              HADOOP_SECURE_DN_USER=hdfs
+              HDFS_NAMENODE_USER=root
+              HDFS_SECONDARYNAMENODE_USER=root
+         start-yarn.sh，stop-yarn.sh顶部也需添加以下
+            YARN_RESOURCEMANAGER_USER=root
+            HADOOP_SECURE_DN_USER=yarn
+            YARN_NODEMANAGER_USER=root
+2、添加1后出现以下错误 by HDFS_DATANODE_SECURE_USER. Using value of HADOOP_SECURE_DN_USER.
+Starting namenodes on [mylinux_1]
+mylinux_1: Permission denied (publickey,gssapi-keyex,gssapi-with-mic,password).
+Starting datanodes
+localhost: Permission denied (publickey,gssapi-keyex,gssapi-with-mic,password).
+Starting secondary namenodes [mylinux_1]
+mylinux_1: Permission denied (publickey,gssapi-keyex,gssapi-with-mic,password).
+2018-11-26 09:32:18,082 WARN util.NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+Starting resourcemanager
+Starting nodemanagers
+localhost: Permission denied (publickey,gssapi-keyex,gssapi-with-mic,password).
+解决办法：配置免密登录（注意：对本机也需要配置）
+ssh-keygen -t rsa
+ssh-copy-id -i ~/.ssh/id_rsa.pub root@MyLinux_1
+*/
