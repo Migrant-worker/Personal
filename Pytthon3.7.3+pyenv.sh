@@ -5,6 +5,17 @@
 yum -y install git
 yum -y install gcc make patch gdbm-devel openssl-devel sqlite-devel readline-devel zlib-devel bzip2-devel libffi-devel
 
+
+#无法正常clone需要尽心如下git设置
+git config --global http.postBuffer 500M
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+git config --global http.lowSpeedLimit 0
+git config --global http.lowSpeedTime 999999
+
+
+
+
 # 安装pyenv
 curl https://pyenv.run | bash
 
